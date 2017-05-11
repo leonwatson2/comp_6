@@ -41,14 +41,14 @@ non terminal Expression term;
 non terminal Expression factor;
 non terminal Expression primaryExpression;
 non terminal String addingOperator;
-non terminal multiplyingOperator;
-non terminal relationalOperator;
-non terminal unaryOperator;
+non terminal String multiplyingOperator;
+non terminal String relationalOperator;
+non terminal String unaryOperator;
 non terminal object;
 non terminal Expression variable;
 non terminal Expression classMember;
 non terminal Expression subscriptList;
-non terminal functionCall;
+non terminal Expression functionCall;
 non terminal String classId;
 non terminal String objectId;
 non terminal String functionId;
@@ -158,8 +158,8 @@ statement ::= compoundStatement
   | IF LPAREN expression RPAREN statement elseOption
   | WHILE LPAREN expression RPAREN statement ;
 
-coutStatement ::= COUT OUTPUT expression SEMICOLON {: env.emit("printf()"); :};
-cinStatement ::= CIN INPUT variable SEMICOLON;
+coutStatement ::= COUT OUTPUT expression:e SEMICOLON {: env.emitPrintStatement(e); :};
+cinStatement ::= CIN INPUT variable:e SEMICOLON {: env.emitScanStatement(e); :};
 
 compoundStatement ::= LBRACE statementList RBRACE ;
 
@@ -188,15 +188,24 @@ arithmeticExpression ::= term:e {: RESULT = e; :}
 
 addingOperator ::= PLUS {: RESULT=" + "; :}| MINUS {: RESULT=" - "; :};
 
-term ::= factor:e {: RESULT = e; :} | term:e multiplyingOperator factor:f {: RESULT = e; :};
+term ::= factor:e 
+        {: RESULT = e; :} 
+        | term:e multiplyingOperator:oper factor:e2 
+        {: RESULT = env.emitThreeAddress(e, e2, oper);  env.newTemp(); :};
 
-multiplyingOperator ::= TIMES | SLASH ;
+multiplyingOperator ::= TIMES{: RESULT=" * "; :} | SLASH{: RESULT=" / "; :} ;
 
 factor ::= primaryExpression:e {: RESULT=e; :} | unaryOperator factor ;
 
 unaryOperator ::= addingOperator | NOT ;
 
-primaryExpression ::= variable:e {: if(e.isArray){ RESULT = env.emitArrayAssign(e); env.newTemp(); } else RESULT=e; :} | INTEGER:val {: RESULT=new Expression(val, false); :} | LPAREN expression RPAREN ;
+primaryExpression ::= variable:e 
+                    {: 
+                      if(e.isArray){ RESULT = env.emitArrayAssign(e); env.newTemp(); } else RESULT=e; 
+                    :} 
+                    | INTEGER:val 
+                    {: RESULT=new Expression(val, false); :} 
+                    | LPAREN expression:e RPAREN {: RESULT = e; :};
 
 variable ::= classMember:e {: RESULT=e; :} | variable DOT classMember ;
 
@@ -204,12 +213,18 @@ classMember ::= objectId:id subscriptList:sub
             {: 
               if(sub != null){ Expression e = new Expression(id, true); e.exp = sub; RESULT=e;} else { RESULT=new Expression(id, false); } 
 
-            :} | functionCall ;
+            :} | functionCall:e 
+            {:
+              RESULT = e;
+            :} ;
 
 subscriptList ::= subscriptList LBRACK expression:e RBRACK {: RESULT = e; :}| ;
 
-functionCall ::= functionId LPAREN expressionListOption RPAREN 
-  | object DOT functionId LPAREN expressionListOption RPAREN ; 
+functionCall ::= functionId:id LPAREN expressionListOption RPAREN 
+          {: RESULT = new Expression(id, false); :}
+  | object DOT functionId:id LPAREN expressionListOption RPAREN 
+        {: RESULT = new Expression(id + ".", false); :}; 
+}
 
 expressionListOption ::= expressionList | ;
 

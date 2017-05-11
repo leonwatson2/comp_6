@@ -1,0 +1,36 @@
+#bin/bash
+# This runs java tests on mainFile variable 
+# using files in testDir or the arguments in the command arguments.
+#
+# Ex. './runTest.sh' runs all test on all files in the testDir
+# Ex. './runTest.sh testFile.cpp' runs a test on testFile.cpp
+# Ex. './runTest.sh testFile1.cpp testFile2.cpp' runs a test on testFile.cpp and testFile2.cpp
+
+mainFile=TinyCPPSTPars
+testDir=tests
+if [ -f $mainFile".class" ];then
+
+	if [ -d $testDir ];then
+		if [ $# -eq 0 ];then
+			echo "Running all tests in the '"$testDir"' directory."
+			sleep 2
+			./runTest $testDir/*
+		else
+		for i in $@; do
+			if [ -f $i ];then
+				echo "File: "$i
+				java -cp .:java-cup-11b-runtime.jar $mainFile  < $i
+		
+			else 	
+				echo "Test fail: "$i" file does not exist. "
+				sleep 3	
+			fi
+		done
+		fi
+	else
+		echo $testDir" is not a directory."
+	fi
+else
+	echo "Please compile the java files using 'make all' command"
+
+fi

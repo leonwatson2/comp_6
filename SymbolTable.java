@@ -65,12 +65,19 @@ class Declarator {
 
   private String id;
   private Type type;
-
+  private boolean isArray;
   public Declarator (String id, Type type) {
     this . id = id;
     this . type = type;
+    this . isArray = false;
+  }
+  public Declarator (String id, Type type, boolean isOfTypeArray) {
+    this . id = id;
+    this . type = type;
+    this . isArray = isOfTypeArray;
   }
 
+  public boolean isArray(){ return isArray; }
   public String id () { return id; }
 
   public Type type () { return type; }
@@ -86,7 +93,7 @@ class SymbolTableEntry {
   private Type type;
   private SymbolTable localEnv;
   private String funcCode;
-
+  public boolean isParam = false;
   public SymbolTableEntry (Category cat) { 
     category = cat;
   }
@@ -105,6 +112,11 @@ class SymbolTableEntry {
     category = cat;
     type = typ;
     localEnv = env;
+  }
+  public SymbolTableEntry (Category cat, Type typ, boolean isParameter) {
+    category = cat;
+    type = typ;
+    isParam = isParameter;
   }
 
   public Category category () { return category; }
@@ -143,11 +155,16 @@ public class SymbolTable {
 
   public int currentLabel = 0;
 
+  public int numberOfParams = 0;
+
   private TreeMap <String, SymbolTableEntry> table; 	// id table
+
+  public List<Expression> paramList ;
 
   public SymbolTable (SymbolTable staticParent) { 
     parent = staticParent;
     table = new TreeMap <String, SymbolTableEntry> (); 
+    paramList = new ArrayList<Expression>();
   }
 
   public SymbolTable parent () { return parent; }
@@ -180,8 +197,8 @@ public class SymbolTable {
 
   // The enterVar function enters a variable id into the symbol table.
  
-  public void enterVar (String id, Type type) { 
-    enter (id, new SymbolTableEntry (Category . VARIABLE, type));
+  public void enterVar (String id, Type type, boolean isParam) { 
+    enter (id, new SymbolTableEntry (Category . VARIABLE, type, isParam));
   }
 
   // The enterFunc function enters a function id, its return type and its local 
@@ -207,6 +224,10 @@ public class SymbolTable {
   public void enterClass (String id, SymbolTable env) {
     enter (id, new SymbolTableEntry (Category . CLASS, env));
   }
+
+  public void addParam(Expression e){
+    paramList.add(e);
+  }
   
   //Adds the lineOfCode to the intermediate code.
   public void emit(String lineOfCode){
@@ -230,9 +251,11 @@ public class SymbolTable {
     String assignmentStatement;
     if(e.isArray)
       assignmentStatement = e.addr +"["+ e.exp.addr +"]"+ " = " + e2.addr;
-    else
+    else if(e.params == null)
       assignmentStatement = e.addr + " = " + e2.addr;
-    
+    else{
+      assignmentStatement = e.addr + " = " + e2.addr + "(_actual)";
+    }
     emit(assignmentStatement);
   }
 
@@ -260,7 +283,7 @@ public class SymbolTable {
   public Expression emitArrayAssign(Expression e){
     String arrayAssignment = tempVariable(numberOfTemps) + " = " + e.addr +"["+ e.exp.addr +"]";
     emit(arrayAssignment);
-    return new Expression(tempVariable(numberOfTemps), false);
+    return new Expression(tempVariable(numberOfTemps), true);
   }
 
   /*
@@ -281,6 +304,7 @@ public class SymbolTable {
     emitGoto(currentLabel + 1);
     emitLabel();
   }
+  
   /*
   * Adds a most recent label to the intermediate code.
   */
@@ -293,6 +317,25 @@ public class SymbolTable {
   */
   public void emitGoto(int number){
     intermediateCode += "goto " + getLabel(number) + ";\n";
+  }
+
+  public String emitParamsListStatement(String id){
+    for(Expression e : paramList){
+      if(e.isArray)
+        emit("_actual[" + paramList.indexOf(e) + "] = (int)" + e.addr);
+      else
+        emit("_actual[" + paramList.indexOf(e) + "] = " + e.addr);
+    }
+    emit(tempVariable(numberOfTemps) + " = " + id + "(_actual)");
+    return tempVariable(numberOfTemps);
+  }
+  public void emitFunctionParamStatement(Declarator decl){
+    String functionParamStatement = decl.id() + " = ";
+    if(decl.isArray())
+      functionParamStatement += "("+ decl.type() +"*) _formal["+ (numberOfParams++) +"]";
+    else 
+      functionParamStatement += "_formal["+ (numberOfParams++) +"]";
+    emit(functionParamStatement);
   }
 
   /*
@@ -355,17 +398,40 @@ public class SymbolTable {
        idEntry . localEnv () . printFunction (idEntry, id); 
       }
       if(idEntry . category () == Category . CLASS){
-
+       idEntry . localEnv () . printClass (idEntry, id); 
       }
     } 
   }//print
 
   public void printFunction(SymbolTableEntry funcOrClass, String funcName){
-    if(funcName == "main")
-      System.out.print(funcOrClass.type() + " " + funcName + "(){\n");
+    printFunctionStart(funcOrClass, funcName);
+
+    printDeclarations();
+
+    printTempVariables();
+    printFunctionCallVariable();
+    System.out.println(intermediateCode);
+
+    System.out.println("}\n");
+
+  }//printFunction
+
+  public void printFunctionStart(SymbolTableEntry table, String funcName){
+     if(funcName.equals("main"))
+      System.out.print(table.type() + " " + funcName + "(){\n");
     else
-      System.out.print(funcOrClass.type() + " " + funcName + "(){\n");
-    
+      System.out.print(table.type() + " " + funcName + "(int* _formal){\n");
+
+  }
+
+  public void printClass(SymbolTableEntry funcOrClass, String className){
+    System.out.println("class " + className + "{}");
+  }
+
+  /*
+  * Prints all the declartions in the table.
+  */
+  public void printDeclarations(){
     Iterator <Map . Entry <String, SymbolTableEntry>> envIterator = 
       table . entrySet () . iterator ();
    
@@ -374,20 +440,26 @@ public class SymbolTable {
       String id = entry . getKey ();
       SymbolTableEntry idEntry = entry . getValue ();
       printDeclaration(idEntry, id);
-    } 
+    }
+  }
 
-    printTempVariables();
-    System.out.println(intermediateCode);
-
-    System.out.println("}\n");
-
-  }//printFunction
-
+  /*
+  * Prints declaration of a variable from a SymbolTableEntry
+  * and the id of that variable.
+  * Formatted:
+  * int* num;
+  * int num[100];
+  * int num;
+  */
   public void printDeclaration(SymbolTableEntry t, String id){
     System . out . print("   ");
+
     if(t.type().getClass() == ArrayType.class){
       ArrayType aType = (ArrayType) t.type();
-      System.out.println(aType + " " + id + "["+aType.dimension()+"];");
+      if(t.isParam)
+        System.out.println(aType + "* " + id +";");
+      else
+        System.out.println(aType + " " + id + "["+aType.dimension()+"];");
      }else{
        System.out.println(t + " " + id + ";");
      }
@@ -396,8 +468,13 @@ public class SymbolTable {
   public void printTempVariables(){
     int i = 1;
     while(i < numberOfTemps){
-      System.out.println("   int"+ tempVariable(i++) + ";");
+      System.out.println("   int "+ tempVariable(i++) + ";");
     }
+  }
+
+  public void printFunctionCallVariable(){
+    if(paramList.size() > 0)
+      System.out.println("   int _actual[" + paramList.size() +"];");
   }
 
 }
@@ -406,11 +483,17 @@ class Expression{
   public String addr;
   public Boolean isArray;
   public Expression exp;
-
+  public List<Expression> params;
   Expression(String address, boolean t){
     addr = address;
     isArray = t;
 
+  }
+
+  Expression(String address, boolean t, List paramsList){
+    addr = address;
+    isArray = t;
+    params = paramsList;
   }
   public String toString(){
     return addr; 

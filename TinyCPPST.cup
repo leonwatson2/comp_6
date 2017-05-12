@@ -86,6 +86,10 @@ functionDefinition ::=
       currentEnv . enterFunc (id, type, env); /* to allow recursive calls */
     :}
     LBRACE 
+    /* int temp;
+        temp = x + y;
+        return temp;
+    */
     declaratorList statementListOption RETURN expression:e SEMICOLON RBRACE 
     {: 
       env.emitReturnStatement(e);
@@ -97,7 +101,7 @@ functionDefinition ::=
 declaration ::= classSpecifier SEMICOLON 
   | declarator:decl SEMICOLON 
     {:
-      env . enterVar (decl . id (), decl . type ());
+      env . enterVar (decl . id (), decl . type (), false);
     :} ;
 
 simpleTypeName ::= 
@@ -107,7 +111,7 @@ simpleTypeName ::=
 declaratorList ::= 
     declaratorList declarator:decl SEMICOLON 
     {:
-      env . enterVar (decl . id (), decl . type ());
+      env . enterVar (decl . id (), decl . type (), false);
     :}
   | ;
 
@@ -119,7 +123,7 @@ declarator ::=
   | declarator:decl LBRACK INTEGER:dimension RBRACK 
     {:
       RESULT = new Declarator (decl . id (), 
-        new ArrayType (Integer . parseInt (dimension), decl . type ()));
+        new ArrayType (Integer . parseInt (dimension), decl . type ()), true);
     :} ;
 
 argumentDeclarationListOption ::= argumentDeclarationList | ;
@@ -127,11 +131,15 @@ argumentDeclarationListOption ::= argumentDeclarationList | ;
 argumentDeclarationList ::= 
     argumentDeclarationList COMMA declarator:decl
     {:
-      env . enterVar (decl . id (), decl . type ());
+      env.emitFunctionParamStatement(decl);
+      env . enterVar (decl . id (), decl . type (), true);
     :}
-  | declarator:decl
+  | 
+
+  declarator:decl
     {:
-      env . enterVar (decl . id (), decl . type ());
+      env.emitFunctionParamStatement(decl);
+      env . enterVar (decl . id (), decl . type (), true);
     :} ;
 
 classSpecifier ::= 
@@ -154,7 +162,7 @@ memberList ::= memberList memberDeclaration | memberDeclaration ;
 memberDeclaration ::= 
     declarator:decl SEMICOLON 
     {:
-      env . enterVar (decl . id (), decl . type ());
+      env . enterVar (decl . id (), decl . type (), false);
     :}
   | functionDefinition ;
 
@@ -241,14 +249,14 @@ classMember ::= objectId:id subscriptList:sub
 subscriptList ::= subscriptList LBRACK expression:e RBRACK {: RESULT = e; :}| ;
 
 functionCall ::= functionId:id LPAREN expressionListOption RPAREN 
-          {: RESULT = new Expression(id, false); :}
+          {: RESULT = new Expression(env.emitParamsListStatement(id), false, env.paramList);  env.newTemp(); :}
   | object DOT functionId:id LPAREN expressionListOption RPAREN 
         {: RESULT = new Expression(id + ".", false); :}; 
 }
 
 expressionListOption ::= expressionList | ;
 
-expressionList ::= expressionList COMMA expression | expression ;
+expressionList ::= expressionList COMMA expression:e {: env.addParam(e); :}| expression:e {: env.addParam(e); :} ;
 
 classId ::= ID:id {: RESULT = id; :} ;
 

@@ -141,6 +141,8 @@ public class SymbolTable {
 
   public int numberOfTemps = 1;
 
+  public int currentLabel = 0;
+
   private TreeMap <String, SymbolTableEntry> table; 	// id table
 
   public SymbolTable (SymbolTable staticParent) { 
@@ -206,10 +208,24 @@ public class SymbolTable {
     enter (id, new SymbolTableEntry (Category . CLASS, env));
   }
   
-  //Adds the lineOfCode to the itermidiate code.
+  //Adds the lineOfCode to the intermediate code.
   public void emit(String lineOfCode){
     intermediateCode += "   " + lineOfCode + ";\n";
   }
+
+  /*
+  * Adds the header file string passed in to the intermediate code.
+  * i.e. #include <stdio.h>
+  */
+  public void emitHeader(String header){
+    intermediateCode += header + "\n";
+  }
+
+  /*
+  * Adds an assignment statement to the intermediate code.
+  * @param e, The expression/variable being assigned.
+  * @param e2, The expression that e is assign 2 assigned.
+  */
   public void emitAssign(Expression e, Expression e2){
     String assignmentStatement;
     if(e.isArray)
@@ -221,16 +237,16 @@ public class SymbolTable {
   }
 
   /*
-  * Adds a print statement to the intermidiate code.
+  * Adds a print statement to the intermediate code.
   */
   public void emitPrintStatement(Expression e){
-    String printStatement = "print(\"%d\", "+ e.addr +")";
+    String printStatement = "printf(\"%d\", "+ e.addr +")";
 
     emit(printStatement);
   }
 
   /*
-  * Adds a scanf statement to the intermidiate code.
+  * Adds a scanf statement to the intermediate code.
   */
   public void emitScanStatement(Expression e){
     String scanStatement = "scanf(\"%d\", &"+ e.addr +")";
@@ -239,7 +255,7 @@ public class SymbolTable {
   }
 
   /*
-  * Adds an array assignment statement to the intermidiate code.
+  * Adds an array assignment statement to the intermediate code.
   */
   public Expression emitArrayAssign(Expression e){
     String arrayAssignment = tempVariable(numberOfTemps) + " = " + e.addr +"["+ e.exp.addr +"]";
@@ -248,7 +264,7 @@ public class SymbolTable {
   }
 
   /*
-  * Adds a three address statement to the intermidiate code.
+  * Adds a three address statement to the intermediate code.
   */
   public Expression emitThreeAddress(Expression e, Expression e2, String oper){
     String threeAd = tempVariable(numberOfTemps) + " = "+ e.addr + oper + e2.addr;
@@ -256,13 +272,60 @@ public class SymbolTable {
     return new Expression(tempVariable(numberOfTemps), false);
   }
 
+  /*
+  * Adds an if statement to the intermediate code.
+  */
+  public void emitIfStatement(Expression e, Expression e2, String oper){
+    String ifStatement = "if(" + e.addr + oper + e2.addr + ") goto " + getLabel(currentLabel);
+    emit(ifStatement);
+    emitGoto(currentLabel + 1);
+    emitLabel();
+  }
+  /*
+  * Adds a most recent label to the intermediate code.
+  */
+  public void emitLabel(){
+    intermediateCode += makeLabel(currentLabel) + "\n";
+  }
+
+  /*
+  * Adds a goto with the label number to the intermediate code.
+  */
+  public void emitGoto(int number){
+    intermediateCode += "goto " + getLabel(number) + ";\n";
+  }
+
+  /*
+  * Adds a return statement to the intermediate code.
+  */
+  public void emitReturnStatement(Expression e){
+    emit("return " + e.addr);
+  }
+
+  //Return the string form of the temp variable of the number passed in.
   public String tempVariable(int number){
     return "_T" + number;
   }
 
+  public String makeLabel(int number){
+    return "_L" + number + ":";
+  }
+
+  public String getLabel(int number){
+    return "_L" + number;
+  }
+ 
+  //Increments the number of temps.
   public int newTemp(){
     return numberOfTemps++;
   }
+  
+  //Increments the current label.
+  public int newLabel(){
+    return currentLabel++;
+  }
+
+
   public void print1(String blockName){
     System.out.println();
     System . out . println ("Intermediate Code for " + blockName);
@@ -298,7 +361,10 @@ public class SymbolTable {
   }//print
 
   public void printFunction(SymbolTableEntry funcOrClass, String funcName){
-    System.out.print(funcOrClass.type() + " " + funcName + "{\n");
+    if(funcName == "main")
+      System.out.print(funcOrClass.type() + " " + funcName + "(){\n");
+    else
+      System.out.print(funcOrClass.type() + " " + funcName + "(){\n");
     
     Iterator <Map . Entry <String, SymbolTableEntry>> envIterator = 
       table . entrySet () . iterator ();

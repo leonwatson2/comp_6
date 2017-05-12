@@ -11,7 +11,9 @@ int main ()
   r = x + q;
 
   q = x + y;
-
+  if(q < r){
+    r = r + 1;
+  }
   cout << q;
   return 0;
 }

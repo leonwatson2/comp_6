@@ -5,7 +5,7 @@ action code {: SymbolTable currentEnv, env; :};
 terminal String ID;
 terminal String INTEGER;
 terminal AND, OR, NOT;
-terminal LT, LE, GT, GE, EQ, NE;
+terminal String LT, LE, GT, GE, EQ, NE;
 terminal PLUS, MINUS, TIMES, SLASH;
 terminal COLON, SEMICOLON, DOT, COMMA;
 terminal LPAREN, RPAREN, LBRACK, RBRACK, LBRACE, RBRACE, ASSIGN, INPUT, OUTPUT;
@@ -54,6 +54,8 @@ non terminal String objectId;
 non terminal String functionId;
 non terminal coutStatement;
 non terminal cinStatement;
+non terminal ifStatement;
+non terminal whileStatement;
 
 precedence left ELSE;
 
@@ -62,7 +64,7 @@ start with program;
 
 program ::= 
     INCLUDE IOSTREAM USING NAMESPACE STD SEMICOLON 
-    {: env = new SymbolTable (null); env.emit("#include <stdio.h>"); /* start new scope */ :}
+    {: env = new SymbolTable (null); env.emitHeader("#include <stdio.h>"); /* start new scope */ :}
     externalDefinitionList {: RESULT = env; :} ;
 
 externalDefinitionList ::= externalDefinition 
@@ -71,21 +73,26 @@ externalDefinitionList ::= externalDefinition
 externalDefinition ::= functionDefinition | declaration ;
 
 functionDefinition ::= 
+    /*sum*/
     simpleTypeName:type functionId:id 
     {:
-      currentEnv = env;         	  /* save current env */
+      currentEnv = env;             /* save current env */
       env = new SymbolTable (currentEnv); /* start new scope */
     :}
+    
+    /*(x,y)*/
     LPAREN argumentDeclarationListOption RPAREN 
     {:
       currentEnv . enterFunc (id, type, env); /* to allow recursive calls */
     :}
     LBRACE 
-    declaratorList statementListOption RETURN expression SEMICOLON RBRACE 
+    declaratorList statementListOption RETURN expression:e SEMICOLON RBRACE 
     {: 
+      env.emitReturnStatement(e);
       currentEnv . enterFuncCode (id, ""); /* add code to function entry */
       env = env . parent (); /* restore env */ 
     :} ;
+
 
 declaration ::= classSpecifier SEMICOLON 
   | declarator:decl SEMICOLON 
@@ -151,15 +158,20 @@ memberDeclaration ::=
     :}
   | functionDefinition ;
 
-statement ::= compoundStatement 
-  | assignmentStatement SEMICOLON 
-  | cinStatement
-  | coutStatement
-  | IF LPAREN expression RPAREN statement elseOption
-  | WHILE LPAREN expression RPAREN statement ;
+statement ::= compoundStatement {:  :}
+  | assignmentStatement SEMICOLON {:  :}
+  | cinStatement {:  :}
+  | coutStatement {:  :}
+  | ifStatement {: env.newLabel(); env.emitLabel(); :}
+  | whileStatement {: env.newLabel(); env.emitLabel();  :};
 
 coutStatement ::= COUT OUTPUT expression:e SEMICOLON {: env.emitPrintStatement(e); :};
 cinStatement ::= CIN INPUT variable:e SEMICOLON {: env.emitScanStatement(e); :};
+ifStatement ::= IF LPAREN expression RPAREN statement elseOption;
+whileStatement ::= 
+  {: env.newLabel(); env.emitLabel();:} 
+    WHILE LPAREN expression RPAREN statement 
+    {: env.emitGoto(env.currentLabel - 1); :};
 
 compoundStatement ::= LBRACE statementList RBRACE ;
 
@@ -177,10 +189,18 @@ andExpression ::= andExpression AND relationalExpression
   | relationalExpression:e {: RESULT=e; :} ;
 
 relationalExpression ::= 
-    relationalExpression relationalOperator arithmeticExpression
-  | arithmeticExpression:e {: RESULT=e; :};
+    relationalExpression:e relationalOperator:oper arithmeticExpression:e2 
+    {: env.newLabel(); env.emitIfStatement(e, e2, oper);  :}
+  | arithmeticExpression:e 
+    {: RESULT = e; :};
 
-relationalOperator ::= LT | LE | GT | GE | EQ | NE ;
+relationalOperator ::= LT:val {: RESULT=" < "; :} 
+                      | LE:val {: RESULT=" <= "; :} 
+                      | GT:val {: RESULT=" > "; :} 
+                      | GE:val {: RESULT=" >= "; :} 
+                      | EQ:val {: RESULT=" == "; :} 
+                      | NE:val {: RESULT=" != "; :} 
+                      ;
 
 arithmeticExpression ::= term:e {: RESULT = e; :} 
                       | arithmeticExpression:e addingOperator:oper term:e2 

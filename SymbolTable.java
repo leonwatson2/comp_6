@@ -406,7 +406,7 @@ public class SymbolTable {
   public void printFunction(SymbolTableEntry funcOrClass, String funcName){
     printFunctionStart(funcOrClass, funcName);
 
-    printDeclarations();
+    printDeclarations(false);
 
     printTempVariables();
     printFunctionCallVariable();
@@ -425,13 +425,16 @@ public class SymbolTable {
   }
 
   public void printClass(SymbolTableEntry funcOrClass, String className){
-    System.out.println("class " + className + "{}");
+    System.out.println("struct {");
+      printDeclarations(true);
+
+    System.out.println("\n\n} "+className);
   }
 
   /*
   * Prints all the declartions in the table.
   */
-  public void printDeclarations(){
+  public void printDeclarations(boolean isClass){
     Iterator <Map . Entry <String, SymbolTableEntry>> envIterator = 
       table . entrySet () . iterator ();
    
@@ -439,7 +442,9 @@ public class SymbolTable {
       Map . Entry <String, SymbolTableEntry> entry = envIterator . next ();
       String id = entry . getKey ();
       SymbolTableEntry idEntry = entry . getValue ();
-      printDeclaration(idEntry, id);
+      if (idEntry . category () != Category . VARIABLE && isClass){
+        printDeclaration(idEntry, id);
+      }
     }
   }
 

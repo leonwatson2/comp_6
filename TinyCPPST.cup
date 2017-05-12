@@ -235,7 +235,7 @@ primaryExpression ::= variable:e
                     {: RESULT=new Expression(val, false); :} 
                     | LPAREN expression:e RPAREN {: RESULT = e; :};
 
-variable ::= classMember:e {: RESULT=e; :} | variable DOT classMember ;
+variable ::= classMember:e {: RESULT=e; :} | variable DOT classMember:e {: RESULT=e; :};
 
 classMember ::= objectId:id subscriptList:sub 
             {: 
